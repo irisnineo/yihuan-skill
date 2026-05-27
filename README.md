@@ -34,3 +34,9 @@ reports/name-date.html
 ## 说明
 
 这是非官方工具，数据和活动规则需要随游戏实装更新。
+
+## 赞赏
+
+万一呢？
+
+<img src="sponsor.jpg" alt="九原的赞赏码" width="320">
