@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>nineo v1.1 资源分析</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm;
+    }
+
+    :root {
+      --ink: #162018;
+      --muted: #5d6b61;
+      --line: #d8e2d6;
+      --paper: #fbfaf4;
+      --panel: #ffffff;
+      --accent: #2f6f4f;
+      --accent-soft: #e6f2e5;
+      --gold: #b98225;
+      --danger: #a74935;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+      line-height: 1.55;
+    }
+
+    .report {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 34px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 32px 34px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background:
+        radial-gradient(circle at 86% 10%, rgba(185, 130, 37, 0.20), transparent 30%),
+        linear-gradient(135deg, #ffffff 0%, #edf5ea 100%);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -68px;
+      bottom: -92px;
+      width: 220px;
+      height: 220px;
+      border: 34px solid rgba(47, 111, 79, 0.12);
+      border-radius: 50%;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      position: relative;
+      margin: 0;
+      font-size: 34px;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      position: relative;
+      max-width: 720px;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .pill {
+      padding: 7px 11px;
+      border: 1px solid rgba(47, 111, 79, 0.2);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    section {
+      margin-top: 26px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--panel);
+      box-shadow: 0 12px 28px rgba(22, 32, 24, 0.06);
+      page-break-inside: avoid;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      color: var(--accent);
+      font-size: 21px;
+    }
+
+    p {
+      margin: 0 0 10px;
+    }
+
+    .lead {
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .highlight {
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .card {
+      min-height: 98px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(180deg, #ffffff, #f7fbf5);
+    }
+
+    .card b {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .card span {
+      display: block;
+      margin-top: 8px;
+      color: var(--accent);
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th:first-child,
+    td:first-child {
+      min-width: 96px;
+      padding-right: 18px;
+      white-space: nowrap;
+    }
+
+    th {
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    td.num,
+    th.num {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    tr.recommended > * {
+      background: #fff7e7;
+    }
+
+    tr.recommended > *:first-child {
+      color: var(--gold);
+      font-weight: 800;
+    }
+
+    .note {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-left: 4px solid var(--accent);
+      border-radius: 10px;
+      background: #f2f7ef;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .risk {
+      border-left-color: var(--danger);
+      background: #fff0eb;
+    }
+
+    ol,
+    ul {
+      margin: 10px 0 0;
+      padding-left: 22px;
+    }
+
+    li {
+      margin: 7px 0;
+    }
+
+    .footer {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+      }
+
+      .report {
+        padding: 0;
+      }
+
+      section,
+      .hero {
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="report">
+    <header class="hero">
+      <p class="eyebrow">YIHUAN RESOURCE PLANNING</p>
+      <h1>nineo v1.1 资源分析</h1>
+      <p class="subtitle">按版本开始前状态进行整版本预估：当前库存 + 1.1 大小月卡党整版本收入 + 本次确认购买的 6 元与 30 元方斯礼包。</p>
+      <div class="meta">
+        <span class="pill">生成日期：2026-05-28</span>
+        <span class="pill">查询日期：整版本预估</span>
+        <span class="pill">版本：1.1</span>
+        <span class="pill">档位：大小月卡党</span>
+        <span class="pill">目标：角色全拿 / 武器 1 把 / 联动满 / 买房 750 万 / 6 元与 30 元方斯礼包</span>
+      </div>
+    </header>
+
+    <section>
+      <h2>结论</h2>
+      <p class="lead">目标可以完成。推荐联动从 <span class="highlight">12-15 档</span> 开始用环石支付，版本末约剩 <span class="highlight">15,126 环石</span>、<span class="highlight">582.3 万方斯</span>。</p>
+      <p>按 nineo 档案优先级，资源先保角色图鉴和 1 把关键武器，再保联动满档；好感度与买房在这套安排下仍可同时覆盖。6 元与 30 元方斯礼包计入后，12-15 档联动支付会把方斯留在 nineo 建议的 400-600 万安全区间上沿；若角色抽卡偏黑或新增都市开销，再把联动调整到 11-15 档用环石支付。</p>
+      <div class="grid">
+        <div class="card"><b>版本末环石</b><span>15,126</span></div>
+        <div class="card"><b>版本末方斯</b><span>582.3 万</span></div>
+        <div class="card"><b>三重钥匙余量</b><span>50</span></div>
+        <div class="card"><b>推荐联动环石</b><span>7,600</span></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>可用资源统计</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>资源</th>
+            <th class="num">当前</th>
+            <th class="num">v1.1</th>
+            <th class="num">礼包</th>
+            <th class="num">合计</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>环石</td>
+            <td class="num">19,816</td>
+            <td class="num">11,950</td>
+            <td class="num">0</td>
+            <td class="num">31,766</td>
+          </tr>
+          <tr>
+            <td>限定骰子</td>
+            <td class="num">10</td>
+            <td class="num">24</td>
+            <td class="num">1</td>
+            <td class="num">35</td>
+          </tr>
+          <tr>
+            <td>三重钥匙</td>
+            <td class="num">25</td>
+            <td class="num">85</td>
+            <td class="num">0</td>
+            <td class="num">110</td>
+          </tr>
+          <tr>
+            <td>方斯</td>
+            <td class="num">900 万</td>
+            <td class="num">1402.5 万</td>
+            <td class="num">130 万</td>
+            <td class="num">2432.5 万</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>目标消耗</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>项目</th>
+            <th class="num">消耗</th>
+            <th>备注</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>角色 2 个</td>
+            <td class="num">35 限定骰子 + 9,040 环石</td>
+            <td>按 2 个 S 角色约 91.5 抽计算；优先使用 35 个限定骰子，剩余约 56.5 抽用环石补齐。</td>
+          </tr>
+          <tr>
+            <td>武器 1 把</td>
+            <td class="num">60 三重钥匙</td>
+            <td>1 把武器按约 60 抽计算；整版本可用 110 三重钥匙，覆盖后预计剩 50 三重钥匙。</td>
+          </tr>
+          <tr>
+            <td>猎人交易所</td>
+            <td class="num">253.7 万方斯</td>
+            <td>购买 500 环石、40 三重钥匙和 5 个永恒的螺音；环石和三重钥匙已计入可用资源统计，方斯成本计入目标消耗。</td>
+          </tr>
+          <tr class="recommended">
+            <td>保时捷联动</td>
+            <td class="num">7,600 环石 + 668 万方斯</td>
+            <td>前 1-11 档用方斯，12-15 档用环石，能满档并保留约 582.3 万方斯。</td>
+          </tr>
+          <tr>
+            <td>好感度</td>
+            <td class="num">178.5 万方斯</td>
+            <td>按 5.1 万方斯/天、35 天计算，覆盖基础日常好感投入。</td>
+          </tr>
+          <tr>
+            <td>买房</td>
+            <td class="num">750 万方斯</td>
+            <td>预留 750 万方斯用于买房。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>联动方案分析</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>环石支付档位</th>
+            <th class="num">联动环石</th>
+            <th class="num">联动方斯</th>
+            <th class="num">版本末环石</th>
+            <th class="num">版本末方斯</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>13-15</td>
+            <td class="num">6,000</td>
+            <td class="num">918 万</td>
+            <td class="num">16,726</td>
+            <td class="num">332.3 万</td>
+          </tr>
+          <tr class="recommended">
+            <td>12-15（推荐）</td>
+            <td class="num">7,600</td>
+            <td class="num">668 万</td>
+            <td class="num">15,126</td>
+            <td class="num">582.3 万</td>
+          </tr>
+          <tr>
+            <td>11-15</td>
+            <td class="num">9,000</td>
+            <td class="num">468 万</td>
+            <td class="num">13,726</td>
+            <td class="num">782.3 万</td>
+          </tr>
+          <tr>
+            <td>8-15</td>
+            <td class="num">11,600</td>
+            <td class="num">138 万</td>
+            <td class="num">11,126</td>
+            <td class="num">1112.3 万</td>
+          </tr>
+          <tr>
+            <td>1-15，全环石</td>
+            <td class="num">12,980</td>
+            <td class="num">0 万</td>
+            <td class="num">9,746</td>
+            <td class="num">1250.3 万</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note">13-15 档会把方斯压到约 332.3 万，只高于最低安全垫；12-15 档是本次最均衡的起点。若后续抽卡明显黑于期望，优先把联动调整到 11-15；若 30 元长线资金组合箱已经买过，需要从方斯余量中扣除 100 万。</p>
+    </section>
+
+    <section>
+      <h2>综合分析</h2>
+      <ul>
+        <li><strong>主要压力：</strong>这版资源足够完成角色全拿和 1 把武器，真正需要盯住的是联动满档后还能给买房和日常留下多少方斯。</li>
+        <li><strong>推荐方案：</strong>维持 12-15 档用环石的联动方案；全目标算完后，版本末约余 15,126 环石和 582.3 万方斯，贴近 nineo 建议安全垫的上沿。</li>
+        <li><strong>备选方案：</strong>如果想继续抬高方斯垫，就把联动改成 11-15 档用环石；如果角色抽卡黑于期望，优先用 98 元 10 抽礼包补角色，额外好感、材料消费和环石兑换体力 / 活力先等抽卡与联动结果出来再定。</li>
+      </ul>
+    </section>
+
+    <p class="footer">由 Codex · yihuan-skill 生成</p>
+  </main>
+</body>
+</html>
