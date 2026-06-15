@@ -18,4 +18,4 @@
 
 - `sources/**` 为原始资料、截图和参考文档，只读处理。不修改、重命名、移动 `sources/**` 下的文件。
 - 文档维护默认只修改 `.agents/skills/yihuan-skill/**` 下的文档。
-- 资源规划和报告生成应以 `.agents/skills/yihuan-skill/references/**`、`.agents/skills/yihuan-skill/profiles/**` 和用户本次输入为正式依据。
+- 资源规划报告生成应以 `.agents/skills/yihuan-skill/references/**`、`.agents/skills/yihuan-skill/profiles/**` 和用户本次输入为正式依据。
