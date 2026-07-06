@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>v1.2 版本资源分析</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm;
+    }
+
+    :root {
+      --ink: #162018;
+      --muted: #5d6b61;
+      --line: #d8e2d6;
+      --paper: #fbfaf4;
+      --panel: #ffffff;
+      --accent: #2f6f4f;
+      --accent-soft: #e6f2e5;
+      --gold: #b98225;
+      --danger: #a74935;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+      line-height: 1.55;
+    }
+
+    .report {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 34px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 32px 34px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background:
+        radial-gradient(circle at 86% 10%, rgba(185, 130, 37, 0.20), transparent 30%),
+        linear-gradient(135deg, #ffffff 0%, #edf5ea 100%);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -68px;
+      bottom: -92px;
+      width: 220px;
+      height: 220px;
+      border: 34px solid rgba(47, 111, 79, 0.12);
+      border-radius: 50%;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      position: relative;
+      margin: 0;
+      font-size: 34px;
+      letter-spacing: 0;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .pill {
+      padding: 7px 11px;
+      border: 1px solid rgba(47, 111, 79, 0.2);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    section {
+      margin-top: 26px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--panel);
+      box-shadow: 0 12px 28px rgba(22, 32, 24, 0.06);
+      page-break-inside: avoid;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      color: var(--accent);
+      font-size: 21px;
+    }
+
+    h3 {
+      margin: 18px 0 8px;
+      color: var(--ink);
+      font-size: 16px;
+    }
+
+    p {
+      margin: 0 0 10px;
+    }
+
+    .lead {
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .highlight {
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .card {
+      min-height: 98px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(180deg, #ffffff, #f7fbf5);
+    }
+
+    .card b {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .card span {
+      display: block;
+      margin-top: 8px;
+      color: var(--accent);
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th:first-child,
+    td:first-child {
+      min-width: 96px;
+      padding-right: 18px;
+      white-space: nowrap;
+    }
+
+    th {
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    td.num,
+    th.num {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    tr.recommended > * {
+      background: #fff7e7;
+    }
+
+    tr.recommended > *:first-child {
+      color: var(--gold);
+      font-weight: 800;
+    }
+
+    .note {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-left: 4px solid var(--accent);
+      border-radius: 10px;
+      background: #f2f7ef;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .risk {
+      border-left-color: var(--danger);
+      background: #fff0eb;
+    }
+
+    .footer {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+      }
+
+      .report {
+        padding: 0;
+      }
+
+      section,
+      .hero {
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="report">
+    <header class="hero">
+      <p class="eyebrow">YIHUAN RESOURCE PLANNING</p>
+      <h1>v1.2 版本资源分析</h1>
+      <div class="meta">
+        <span class="pill">生成日期：2026-07-07</span>
+        <span class="pill">版本：v1.2</span>
+        <span class="pill">目标：角色 1 个 / Draco 盲盒满档</span>
+        <span class="pill">氪金预算：零氪</span>
+        <span class="pill">报告类型：当前版本预测</span>
+      </div>
+    </header>
+
+    <section>
+      <h2>结论</h2>
+      <p class="lead">推荐伊洛伊使用现有与后续限定骰子，Draco 盲盒采用 <span class="highlight">10-15 抽用环石</span> 的方案。</p>
+      <p>按 2026-07-07 查询，九百九十九夜按未参与且仍可补拿计入。该路线可完成伊洛伊期望抽和 Draco 满档，并计入默认好感度投入；版本末预计剩余 15,688 环石、771.6 万方斯，仍高于 7,200 环石安全垫。</p>
+      <div class="grid">
+        <div class="card"><b>版本末环石</b><span>15,688</span></div>
+        <div class="card"><b>版本末方斯</b><span>771.6 万</span></div>
+        <div class="card"><b>三重钥匙余量</b><span>50</span></div>
+        <div class="card"><b>活动推荐方案</b><span>10-15 环石</span></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>资源统计</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>资源</th>
+            <th class="num">当前</th>
+            <th class="num">未开放</th>
+            <th class="num">礼包</th>
+            <th class="num">合计</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>环石</td>
+            <td class="num">17,028</td>
+            <td class="num">8,030</td>
+            <td class="num">0</td>
+            <td class="num">25,058</td>
+          </tr>
+          <tr>
+            <td>限定骰子</td>
+            <td class="num">5</td>
+            <td class="num">8</td>
+            <td class="num">0</td>
+            <td class="num">13</td>
+          </tr>
+          <tr>
+            <td>三重钥匙</td>
+            <td class="num">30</td>
+            <td class="num">20</td>
+            <td class="num">0</td>
+            <td class="num">50</td>
+          </tr>
+          <tr>
+            <td>方斯</td>
+            <td class="num">326 万</td>
+            <td class="num">976.5 万</td>
+            <td class="num">0</td>
+            <td class="num">1,302.5 万</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note">未开放列含九百九十九夜未参与可补拿资源：1,850 环石、140 万方斯。猎人交易所默认已购买。</p>
+    </section>
+
+    <section>
+      <h2>目标消耗</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>项目</th>
+            <th class="num">消耗</th>
+            <th>备注</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>角色 伊洛伊</td>
+            <td class="num">13 限定骰子 + 5,120 环石</td>
+            <td>卡池 2026-07-23 - 2026-08-13。</td>
+          </tr>
+          <tr>
+            <td>Draco 盲盒</td>
+            <td class="num">4,250 环石 + 260 万方斯</td>
+            <td>10-15 抽用环石，1-9 抽用方斯，达成满档。</td>
+          </tr>
+          <tr>
+            <td>好感度</td>
+            <td class="num">270.9 万方斯</td>
+            <td>6.45 万方斯/天 x 42 天</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Draco 盲盒方案分析</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>方案</th>
+            <th class="num">联动环石</th>
+            <th class="num">联动方斯</th>
+            <th class="num">版本末环石</th>
+            <th class="num">版本末方斯</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>全方斯</td>
+            <td class="num">0</td>
+            <td class="num">1,180 万</td>
+            <td class="num">19,938</td>
+            <td class="num">缺口 148.4 万</td>
+            <td>保环石但方斯不足。</td>
+          </tr>
+          <tr>
+            <td>11、14-15 抽用环石</td>
+            <td class="num">2,400</td>
+            <td class="num">650 万</td>
+            <td class="num">17,538</td>
+            <td class="num">381.6 万</td>
+            <td>只换最高等效档，环石压力很低。</td>
+          </tr>
+          <tr class="recommended">
+            <td>10-15 抽用环石（推荐）</td>
+            <td class="num">4,250</td>
+            <td class="num">260 万</td>
+            <td class="num">15,688</td>
+            <td class="num">771.6 万</td>
+            <td>兼顾方斯余量与环石安全垫。</td>
+          </tr>
+          <tr>
+            <td>6-15 抽用环石</td>
+            <td class="num">5,480</td>
+            <td class="num">50 万</td>
+            <td class="num">14,458</td>
+            <td class="num">981.6 万</td>
+            <td>强保方斯，环石仍够安全垫。</td>
+          </tr>
+          <tr>
+            <td>全环石</td>
+            <td class="num">5,980</td>
+            <td class="num">0</td>
+            <td class="num">13,958</td>
+            <td class="num">1,031.6 万</td>
+            <td>最大化保方斯，适合后续要买都市外观。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>综合分析</h2>
+      <h3>主要压力</h3>
+      <p>压力集中在 Draco 满档的方斯成本。若全方斯支付，计入伊洛伊和默认好感度后会出现 148.4 万方斯缺口；抽卡侧压力不高，伊洛伊期望 45 抽消耗 13 限定骰子和 5,120 环石后仍有较大余量。</p>
+      <h3>推荐方案</h3>
+      <p>先保留伊洛伊所需资源，再执行 Draco 10-15 抽用环石、1-9 抽用方斯。该方案版本末预计留 15,688 环石和 771.6 万方斯，既完成目标，也保留超过一个角色期望抽的安全垫。</p>
+      <h3>备选方案</h3>
+      <p>如果临近版本末方斯收入少于预期，可升级为 6-15 抽用环石；若想最大化保留环石，可改用 11、14-15 抽环石，但方斯余量会降至 381.6 万。全方斯方案不建议执行。</p>
+    </section>
+
+    <p class="footer">由 Codex · yihuan-skill 生成</p>
+  </main>
+</body>
+</html>
