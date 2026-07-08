@@ -32,6 +32,15 @@ CORE_TYPES = ['环石', '限定骰子', '三重钥匙', '常驻骰子', '方斯'
 EXPECTED_PULLS = {'限定棋盘': 45, '弧盘研摹': 60}
 SAFE_MARGIN_STONE = 7200
 
+# 联动活动方案: {方案名: (环石, 方斯)}
+EVENT_PLANS = {
+    '全方斯': (0, 11800000),
+    '性价比': (2400, 6500000),
+    '均衡': (4250, 2600000),
+    '保方斯': (5480, 500000),
+    '全环石': (5980, 0),
+}
+
 
 def parse_date(s: str) -> date:
     return datetime.strptime(s.strip(), "%Y-%m-%d").date()
@@ -416,7 +425,8 @@ def main():
     parser.add_argument('--include-affection', action='store_true', help='计入好感度成本')
     parser.add_argument('--include-exchange', action='store_true', help='计入交易所成本')
     parser.add_argument('--inventory', default='', help='当前库存，如 "环石:9069,限定骰子:16"')
-    parser.add_argument('--target', default='', help='抽取目标，如 "伊洛伊:0+1"')
+    parser.add_argument('--target', action='append', help='抽取目标，可多次使用，如 --target "真红:0+1" --target "伊洛伊:0+1"')
+    parser.add_argument('--event', default='', help='联动方案，如 "draco:保方斯"')
     args = parser.parse_args()
 
     query_date = parse_date(args.date)
@@ -457,16 +467,27 @@ def main():
     fd = [it for it in daily_items if should_include(args.tier, it['tier'])]
     fp = [it for it in periodic_items if should_include(args.tier, it['tier'])]
 
-    # ── 目标匹配 → 自动设 pool_end ──
-    target_info = None
+    # ── 多目标匹配 + 联动方案 ──
+    target_infos = []
     if args.target:
-        target_info = match_target(args.target, banners)
-        if target_info:
-            # 取角色和武器卡池中较早结束的作为 pool_end
-            ends = [d for d in [target_info['char_banner_end'], target_info['wep_banner_end']] if d]
-            if ends and not args.pool_end:
-                pool_end = parse_date(min(ends))
-                args.pool_end = min(ends)
+        for t_str in args.target:
+            ti = match_target(t_str.strip(), banners)
+            if ti:
+                target_infos.append(ti)
+        # 按卡池结束时间升序排列
+        target_infos.sort(key=lambda t: t.get('char_banner_end') or '9999-12-31')
+
+    # 联动方案
+    event_cost_ring = 0
+    event_cost_fs = 0
+    if args.event:
+        parts = args.event.split(':', 1)
+        if len(parts) == 2:
+            plan_name = parts[1].strip()
+            if plan_name in EVENT_PLANS:
+                event_cost_ring, event_cost_fs = EVENT_PLANS[plan_name]
+                cost_items['环石'] = cost_items.get('环石', 0) + event_cost_ring
+                cost_items['方斯'] = cost_items.get('方斯', 0) + event_cost_fs
 
     # ── 分类 ──
     cd = [classify_daily(it, query_date, pool_end) for it in fd]
@@ -548,22 +569,28 @@ def main():
     # ── 待确认项 ──
     pending_warnings = scan_pending_items(text)
 
-    # ── 目标消耗计算（自动加入 cost_items）──
-    target_result = None
-    if target_info and inventory_available:
-        avail_ltd = inventory_available.get('限定骰子', 0)
-        avail_key = inventory_available.get('三重钥匙', 0)
-        all_avail_stone = inventory_available.get('环石', 0)
-        target_result = compute_consumption(target_info, avail_ltd, avail_key, all_avail_stone)
-        if target_result['stone_needed'] > 0:
-            cost_items['环石'] = cost_items.get('环石', 0) + target_result['stone_needed']
-    elif target_info and not inventory:
-        avail_ltd = obtained.get('限定骰子', 0) + remaining.get('限定骰子', 0)
-        avail_key = obtained.get('三重钥匙', 0) + remaining.get('三重钥匙', 0)
-        net_stone = total.get('环石', 0)
-        target_result = compute_consumption(target_info, avail_ltd, avail_key, net_stone)
-        if target_result['stone_needed'] > 0:
-            cost_items['环石'] = cost_items.get('环石', 0) + target_result['stone_needed']
+    # ── 多目标滚动消耗计算（自动加入 cost_items）──
+    target_results = []
+    if inventory_available:
+        pool_ring = inventory_available.get('环石', 0)
+        pool_ltd = inventory_available.get('限定骰子', 0)
+        pool_key = inventory_available.get('三重钥匙', 0)
+    else:
+        pool_ring = obtained.get('环石', 0) + remaining.get('环石', 0)
+        pool_ltd = obtained.get('限定骰子', 0) + remaining.get('限定骰子', 0)
+        pool_key = obtained.get('三重钥匙', 0) + remaining.get('三重钥匙', 0)
+
+    for ti in target_infos:
+        avail_ltd = pool_ltd
+        avail_key = pool_key
+        tr = compute_consumption(ti, avail_ltd, avail_key, pool_ring)
+        target_results.append({'info': ti, 'result': tr})
+        if tr['stone_needed'] > 0:
+            cost_items['环石'] = cost_items.get('环石', 0) + tr['stone_needed']
+        # 从池中扣除
+        pool_ring -= tr['stone_needed']
+        pool_ltd = max(0, pool_ltd - ti['char_pulls_needed'])
+        pool_key = max(0, pool_key - ti['wep_pulls_needed'])
 
     # ── 最终结余（所有成本扣完后）──
     base = inventory_available if inventory_available else merge_summaries(obtained, remaining)
@@ -613,16 +640,24 @@ def main():
                 'affection_remaining_total': total_affection_cost,
                 'exchange_cost': exchange_cost or None,
             } if profile_name else None,
-            'target': target_result,
-            'target_info': {
-                'character': target_info['character'],
-                'constellation': target_info['constellation'],
-                'weapon': target_info['weapon'],
-                'char_pulls_needed': target_info['char_pulls_needed'],
-                'wep_pulls_needed': target_info['wep_pulls_needed'],
-                'char_banner_end': target_info['char_banner_end'],
-                'wep_banner_end': target_info['wep_banner_end'],
-            } if target_info else None,
+            'target': [{
+                'character': tr['info']['character'],
+                'constellation': tr['info']['constellation'],
+                'weapon': tr['info']['weapon'],
+                'char_pulls_needed': tr['info']['char_pulls_needed'],
+                'wep_pulls_needed': tr['info']['wep_pulls_needed'],
+                'char_banner_end': tr['info']['char_banner_end'],
+                'wep_banner_end': tr['info']['wep_banner_end'],
+                'char_pull_gap': tr['result']['char_pull_gap'],
+                'wep_pull_gap': tr['result']['wep_pull_gap'],
+                'stone_needed': tr['result']['stone_needed'],
+                'stone_remaining': tr['result']['stone_remaining'],
+            } for tr in target_results] if target_results else None,
+            'event_plan': {
+                'name': args.event,
+                'ring_cost': event_cost_ring,
+                'fs_cost': event_cost_fs,
+            } if args.event else None,
         }
         print(json.dumps(output, ensure_ascii=False, indent=2))
         return
@@ -696,14 +731,20 @@ def main():
         print(f"\n💝 好感度（{profile_name}）: 每日 {daily_affection:,} 方斯 × 剩余 {remaining_days} 天 = {total_affection_cost:,} 方斯")
         print(f"   交易所: {exchange_cost:,} 方斯" if exchange_cost else "")
 
-    # 目标
-    if target_result:
-        ti = target_info
+    # 多目标
+    for tr in target_results:
+        ti = tr['info']
+        tr_res = tr['result']
         print(f"\n🎯 目标: {ti['character']} {ti['constellation']}+{ti['weapon']}")
-        print(f"   角色: {ti['char_pulls_needed']}抽 → 可用道具={inventory.get('限定骰子', obtained.get('限定骰子', 0))+remaining.get('限定骰子',0)} → 缺口{target_result['char_pull_gap']}抽 → 环石{target_result['char_pull_gap']*160}")
-        print(f"   专武: {ti['wep_pulls_needed']}抽 → 可用道具={inventory.get('三重钥匙', obtained.get('三重钥匙', 0))+remaining.get('三重钥匙',0)} → 缺口{target_result['wep_pull_gap']}抽 → 环石{target_result['wep_pull_gap']*160}")
-        print(f"   总环石消耗: {target_result['stone_needed']:,}")
-        print(f"   结余环石: {target_result['stone_remaining']:,}  (安全垫 7,200: {'✅' if target_result['safe_margin_ok'] else '❌'})")
+        print(f"   角色: {ti['char_pulls_needed']}抽 → 缺口{tr_res['char_pull_gap']}抽 → 环石{tr_res['char_pull_gap']*160}")
+        print(f"   专武: {ti['wep_pulls_needed']}抽 → 缺口{tr_res['wep_pull_gap']}抽 → 环石{tr_res['wep_pull_gap']*160}")
+        print(f"   总环石消耗: {tr_res['stone_needed']:,}")
+        print(f"   结余环石: {tr_res['stone_remaining']:,} (安全垫7,200: {'✅' if tr_res['safe_margin_ok'] else '❌'})")
+
+    # 联动方案
+    if args.event:
+        print(f"\n🎪 联动方案: {args.event}")
+        print(f"   环石{event_cost_ring:,} + 方斯{event_cost_fs:,}")
 
     # 与收益汇总验证
     if summary_rows:
