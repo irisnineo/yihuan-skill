@@ -15,8 +15,8 @@
     --inventory "环石:9069,限定骰子:16,三重钥匙:10,方斯:9519534" --safe-margin 7200 \\
     --target "伊洛伊:0+1" --event --include-exchange --include-affection
 
-  # 终端表格输出（默认输出 JSON）
-  python3 resource-split.py --version v1.2 --tier 大小月卡党 --format table
+  # 脚本固定输出 JSON
+  python3 resource-split.py --version v1.2 --tier 大小月卡党
 """
 
 import argparse
@@ -29,7 +29,6 @@ from pathlib import Path
 
 
 # ── 常量 ──
-CORE_TYPES = ['环石', '限定骰子', '三重钥匙', '常驻骰子', '方斯']
 DRAW_COUNTS = {
     'expected': {'限定棋盘': 45, '弧盘研摹': 60},
     'max': {'限定棋盘': 90, '弧盘研摹': 80},
@@ -353,12 +352,6 @@ def merge_summaries(*ds: dict) -> dict[str, int]:
     return dict(m)
 
 
-def sorted_types(summary: dict) -> list[str]:
-    known = [t for t in CORE_TYPES if t in summary]
-    unknown = sorted(t for t in summary if t not in CORE_TYPES)
-    return known + unknown
-
-
 # ── 目标匹配 ──
 
 def match_target(target_str: str, banners: list[dict], draw_mode: str) -> dict | None:
@@ -379,22 +372,12 @@ def match_target(target_str: str, banners: list[dict], draw_mode: str) -> dict |
     # 找角色限定棋盘
     char_banner = next((b for b in banners
                         if b['type'] == '限定棋盘' and b['content'] == name), None)
-    # 找同期的弧盘研摹
-    wep_banner = None
-    if char_banner:
-        wep_banner = next((b for b in banners
-                           if b['type'] == '弧盘研摹' and b['start'] == char_banner['start']), None)
-
     return {
         'character': name,
-        'constellation': cons,
-        'weapon': weps,
-        'char_count': char_count,
-        'wep_count': wep_count,
-        'char_banner_name': char_banner['name'] if char_banner else None,
-        'char_banner_end': char_banner['end'] if char_banner else None,
-        'wep_banner_name': wep_banner['name'] if wep_banner else None,
-        'wep_banner_end': wep_banner['end'] if wep_banner else None,
+        'character_count': char_count,
+        'weapon_count': wep_count,
+        'banner_start': char_banner['start'] if char_banner else None,
+        'banner_end': char_banner['end'] if char_banner else None,
         'char_draws_needed': char_count * DRAW_COUNTS[draw_mode]['限定棋盘'],
         'wep_draws_needed': wep_count * DRAW_COUNTS[draw_mode]['弧盘研摹'],
     }
@@ -454,15 +437,6 @@ def sum_resources_between(daily_items: list[dict], periodic_items: list[dict],
     return dict(summary)
 
 
-# ── 格式化 ──
-
-def fmt_num(n: int) -> str:
-    """格式化数字：>=10000 用万"""
-    if n >= 10000:
-        return f"{n/10000:.1f}万"
-    return f"{n:,}"
-
-
 # ══════════════════════════════════════════════
 #  main
 # ══════════════════════════════════════════════
@@ -473,7 +447,6 @@ def main():
     parser.add_argument('--date', default=datetime.now().strftime('%Y-%m-%d'), help='查询日期，默认今天')
     parser.add_argument('--tier', default='大小月卡党', choices=['零氪', '小月卡党', '大小月卡党'], help='收入档位')
     parser.add_argument('--draw-mode', default='expected', choices=['expected', 'max'], help='抽数计算模式：expected=期望，max=保底；默认 expected')
-    parser.add_argument('--format', default='json', choices=['json', 'table'], help='输出格式，默认 json')
     parser.add_argument('--profile', default='', help='用户档案名')
     parser.add_argument('--inventory', default='', help='当前库存，如 "环石:9069,限定骰子:16"')
     parser.add_argument('--safe-margin', type=int, default=None, help='用户要求的环石安全垫；不传表示未设置')
@@ -517,6 +490,8 @@ def main():
         if not event_plans:
             parser.error(f'{event_path} 的候选方案表为空或格式不正确')
 
+    version_start = parse_kv_line(text, '版本开始')
+    version_end = parse_kv_line(text, '版本结束')
     version_days = safe_int(parse_kv_line(text, '版本天数') or '0')
 
     # ── 读取各 section ──
@@ -525,7 +500,6 @@ def main():
     event_block = extract_section(text, '活动资源')
     onetime_block = extract_section(text, '一次性资源')
     banner_block = extract_section(text, '卡池信息')
-    pending_block = extract_section(text, '待确认项')
 
     # ── 卡池表（用于 --target）──
     banners = parse_banner_rows(parse_table(banner_block))
@@ -535,7 +509,6 @@ def main():
     periodic_items = parse_periodic_rows(parse_table(periodic_block))
     event_items = parse_event_rows(parse_table(event_block))
     onetime_items = parse_onetime_rows(parse_table(onetime_block))
-    summary_rows = parse_table(extract_section(text, '收益汇总'))
 
     # ── 档位筛选 ──
     fd = [it for it in daily_items if should_include(args.tier, it['tier'])]
@@ -549,7 +522,7 @@ def main():
             if ti:
                 target_infos.append(ti)
         # 按卡池结束时间升序排列
-        target_infos.sort(key=lambda t: t.get('char_banner_end') or '9999-12-31')
+        target_infos.sort(key=lambda t: t.get('banner_end') or '9999-12-31')
 
     # ── 分类 ──
     cd = [classify_daily(it, query_date) for it in fd]
@@ -579,7 +552,6 @@ def main():
     per_future = [p for p in cp if not p['is_open'] and p.get('before_pool_end', True)]
     ev_ob = [e for e in ce if avail(e)]
     ev_future = [e for e in ce if not e['is_open'] and e.get('before_pool_end', True)]
-    ev_excluded = [e for e in ce if not e.get('before_pool_end', True)]
     on_ob = [o for o in co if avail(o)]
     on_future = [o for o in co if not o['is_open'] and o.get('before_pool_end', True)]
 
@@ -647,11 +619,11 @@ def main():
     previous_cutoff = query_date
 
     for ti in target_infos:
-        if not ti['char_banner_end']:
+        if not ti['banner_end']:
             print(f"❌ 未找到角色 {ti['character']} 的限定棋盘，无法确定资源截止日期", file=sys.stderr)
             sys.exit(2)
 
-        cutoff = parse_date(ti['char_banner_end'])
+        cutoff = parse_date(ti['banner_end'])
         newly_available = sum_resources_between(
             fd, fp, event_items, onetime_items, previous_cutoff, cutoff)
         target_pool = merge_summaries(target_pool, newly_available)
@@ -660,8 +632,6 @@ def main():
         avail_key = max(0, target_pool.get('三重钥匙', 0))
         avail_ring = target_pool.get('环石', 0)
         tr = compute_consumption(ti, avail_ltd, avail_key, avail_ring, args.safe_margin)
-        tr['cutoff_date'] = ti['char_banner_end']
-        tr['newly_available'] = newly_available
 
         # 角色先使用限定骰子、武器先使用三重钥匙，仅对不足抽数使用环石补差。
         used_ltd = min(avail_ltd, ti['char_draws_needed'])
@@ -706,200 +676,66 @@ def main():
             ),
         })
 
-    # ═══════════════════════════════
-    #  JSON 输出
-    # ═══════════════════════════════
-    if args.format == 'json':
-        output = {
-            'version': args.version,
-            'query_date': args.date,
-            'tier': args.tier,
-            'draw_mode': args.draw_mode,
-            'safe_margin': args.safe_margin,
-            'daily_remaining_days': remaining_days,
-            'daily_obtained_days': obtained_days,
-            'inventory': inventory if inventory else None,
-            'packs': pack_items,
-            'costs': cost_items,
-            'notes_extras': dict(notes_extras) if notes_extras else None,
-            'pending_warnings': pending_warnings if pending_warnings else None,
-            'exploration_extra': sum_by_type(expl_items) if expl_items else None,
-            'daily': {
-                'obtained': dict(daily_ob),
-                'remaining': dict(daily_rem),
+    output = {
+        'version': args.version,
+        'query_date': args.date,
+        'version_info': {
+            'start_date': version_start,
+            'end_date': version_end,
+            'days': version_days,
+            'obtained_days': obtained_days,
+            'remaining_days': remaining_days,
+        },
+        'tier': args.tier,
+        'draw_mode': args.draw_mode,
+        'safe_margin': args.safe_margin,
+        'inventory': inventory if inventory else None,
+        'packs': pack_items,
+        'costs': cost_items,
+        'notes_extras': dict(notes_extras) if notes_extras else None,
+        'pending_warnings': pending_warnings if pending_warnings else None,
+        'exploration_extra': sum_by_type(expl_items) if expl_items else None,
+        'summary': {
+            'obtained': dict(obtained),
+            'remaining': dict(remaining),
+            'total': dict(total),
+            'inventory_available': dict(inventory_available) if inventory_available else None,
+            'balance': dict(balance),
+            'balance_scope': '不含活动成本' if args.event else '全部消费后',
+            'final_safe_margin_ok': (
+                None if args.event or args.safe_margin is None
+                else balance.get('环石', 0) >= args.safe_margin
+            ),
+        },
+        'profile': {
+            'name': profile_name,
+            'affection_daily_cost': daily_affection,
+            'affection_remaining_cost': total_affection_cost,
+            'exchange_cost': exchange_cost or None,
+        } if profile_name else None,
+        'target': [{
+            'character': tr['info']['character'],
+            'character_count': tr['info']['character_count'],
+            'weapon_count': tr['info']['weapon_count'],
+            'char_draws_needed': tr['info']['char_draws_needed'],
+            'wep_draws_needed': tr['info']['wep_draws_needed'],
+            'banner': {
+                'start_date': tr['info']['banner_start'],
+                'end_date': tr['info']['banner_end'],
             },
-            'summary': {
-                'obtained': dict(obtained),
-                'remaining': dict(remaining),
-                'total': dict(total),
-                'inventory_available': dict(inventory_available) if inventory_available else None,
-                'balance': dict(balance),
-                'balance_scope': '不含活动成本' if args.event else '全部消费后',
-                'final_safe_margin_ok': (
-                    None if args.event or args.safe_margin is None
-                    else balance.get('环石', 0) >= args.safe_margin
-                ),
-            },
-            'profile': {
-                'name': profile_name,
-                'version_days': version_days,
-                'obtained_days': obtained_days,
-                'remaining_days': remaining_days,
-                'affection': [
-                    {'character': a['character'], 'price': a['price'],
-                     'times': a['times'], 'daily_cost': a['daily_cost']}
-                    for a in affection_items
-                ] if affection_items else None,
-                'affection_daily_total': daily_affection,
-                'affection_remaining_total': total_affection_cost,
-                'exchange_cost': exchange_cost or None,
-            } if profile_name else None,
-            'target': [{
-                'character': tr['info']['character'],
-                'constellation': tr['info']['constellation'],
-                'weapon': tr['info']['weapon'],
-                'char_draws_needed': tr['info']['char_draws_needed'],
-                'wep_draws_needed': tr['info']['wep_draws_needed'],
-                'char_banner_end': tr['info']['char_banner_end'],
-                'wep_banner_end': tr['info']['wep_banner_end'],
-                'cutoff_date': tr['result']['cutoff_date'],
-                'newly_available': tr['result']['newly_available'],
-                'limited_dice_used': tr['result']['limited_dice_used'],
-                'triple_keys_used': tr['result']['triple_keys_used'],
-                'char_draw_gap': tr['result']['char_draw_gap'],
-                'wep_draw_gap': tr['result']['wep_draw_gap'],
-                'stone_needed': tr['result']['stone_needed'],
-                'stone_remaining': tr['result']['stone_remaining'],
-            } for tr in target_results] if target_results else None,
-            'event': {
-                'participated': True,
-                'plans': event_results,
-            } if args.event else None,
-        }
-        print(json.dumps(output, ensure_ascii=False, indent=2))
-        return
-
-    # ═══════════════════════════════
-    #  表格输出
-    # ═══════════════════════════════
-    print(f"{'='*70}")
-    print(f"  异环 {args.version} 资源拆分")
-    parts = [f"查询日期: {args.date}", f"收入档位: {args.tier}",
-             f"抽数模式: {args.draw_mode}"]
-    if inventory:
-        parts.append(f"已输库存")
-    print("  |  ".join(parts))
-    print(f"  已过 {obtained_days} 天 / 剩余 {remaining_days} 天")
-    print(f"{'='*70}")
-
-    # 警告
-    if pending_warnings:
-        print(f"\n⚠️  待确认项警告 ({len(pending_warnings)} 条估算数据):")
-        for w in pending_warnings[:3]:
-            print(f"  ⚠  {w[:70]}")
-        if len(pending_warnings) > 3:
-            print(f"  ... 及 {len(pending_warnings)-3} 条")
-
-    # 每日
-    print(f"\n📅 每日资源")
-    print(f"{'来源':20s} {'类型':10s} {'日量':>8s} {'已得':>8s} {'剩余':>8s} {'合计':>8s}")
-    print('-' * 66)
-    for d in cd:
-        print(f"{d['source']:20s} {d['type']:10s} {d['daily_qty']:>8,} {d['obtained_qty']:>8,} {d['remaining_qty']:>8,} {d['total_qty']:>8,}")
-    if notes_extras:
-        print(f"  → 备注附加: {dict(notes_extras)}")
-
-    # 周期
-    print(f"\n🔄 周期资源已开放 / 未开放: {len(per_ob)} / {len(per_future)} 条")
-
-    # 活动
-    print(f"\n🎯 活动已开放 / 未开放: {len([e for e in ev_ob if e['qty']>0])} / {len(ev_future)} 条")
-    if ev_excluded:
-        print(f"  ✗ 卡池截止排除了 {len(ev_excluded)} 条")
-
-    # 探索奖励
-    if expl_items:
-        print(f"\n🗺️  探索奖励（额外预期）: {sum_by_type(expl_items)}")
-
-    # 一次性
-    print(f"\n📦 一次性已开放 / 未开放: {len(on_ob)} / {len(on_future)} 条")
-
-    # ── 汇总 ──
-    src = inventory_available if inventory_available else obtained
-    label = "库存可用" if inventory_available else "已开放"
-
-    all_types = sorted_types(merge_summaries(src, remaining, balance))
-
-    print(f"\n{'='*70}")
-    print(f"  📊 {'不含活动成本汇总' if args.event else '最终汇总'}")
-    print(f"{'='*70}")
-    balance_label = '不含活动' if args.event else '结余'
-    print(f"{'资源':14s} {label:>12s} {'未开放':>12s} {'可动用':>12s} {balance_label:>12s}")
-    print('-' * 66)
-    for rt in all_types:
-        src_v = src.get(rt, 0)
-        rem = remaining.get(rt, 0)
-        avl = (inventory_available if inventory_available else merge_summaries(obtained, remaining)).get(rt, 0)
-        bal = balance.get(rt, 0)
-        print(f"{rt:14s} {src_v:>12,} {rem:>12,} {avl:>12,} {bal:>12,}")
-
-    final_ring = balance.get('环石', 0)
-    if args.safe_margin is not None:
-        safe_label = '不含活动安全垫' if args.event else '全部消费后安全垫'
-        print(f"\n🛡️  {safe_label}: {'✅' if final_ring >= args.safe_margin else '❌'} "
-              f"（环石 {final_ring:,} / 要求 {args.safe_margin:,}）")
-    else:
-        print("\n🛡️  安全垫：未设置")
-
-    # 好感度
-    if affection_items:
-        print(f"\n💝 好感度（{profile_name}）: 每日 {daily_affection:,} 方斯 × 剩余 {remaining_days} 天 = {total_affection_cost:,} 方斯")
-        print(f"   交易所: {exchange_cost:,} 方斯" if exchange_cost else "")
-
-    # 多目标
-    for tr in target_results:
-        ti = tr['info']
-        tr_res = tr['result']
-        print(f"\n🎯 目标: {ti['character']} {ti['constellation']}+{ti['weapon']}")
-        print(f"   角色: {ti['char_draws_needed']}抽 → 缺口{tr_res['char_draw_gap']}抽 → 环石{tr_res['char_draw_gap']*160}")
-        print(f"   专武: {ti['wep_draws_needed']}抽 → 缺口{tr_res['wep_draw_gap']}抽 → 环石{tr_res['wep_draw_gap']*160}")
-        print(f"   总环石消耗: {tr_res['stone_needed']:,}")
-        target_safe = ('未设置' if tr_res['safe_margin_ok'] is None
-                       else '✅' if tr_res['safe_margin_ok'] else '❌')
-        print(f"   结余环石: {tr_res['stone_remaining']:,}（安全垫: {target_safe}）")
-
-    # 活动方案
-    if args.event:
-        print("\n🎪 活动候选方案")
-        print(f"{'方案':18s} {'活动环石':>12s} {'活动方斯':>14s} {'版本末环石':>12s} {'版本末方斯':>14s} {'安全垫':>8s}")
-        print('-' * 88)
-        for plan in event_results:
-            plan_balance = plan['balance']
-            plan_safe = ('—' if plan['safe_margin_ok'] is None
-                         else '✅' if plan['safe_margin_ok'] else '❌')
-            print(f"{plan['name']:18s} {plan['ring_cost']:>12,} {plan['fs_cost']:>14,} "
-                  f"{plan_balance.get('环石', 0):>12,} {plan_balance.get('方斯', 0):>14,} "
-                  f"{plan_safe:>8s}")
-
-    # 与收益汇总验证
-    if summary_rows:
-        tier_map = {'零氪': 0, '小月卡党': 1, '大小月卡党': 2}
-        idx = tier_map.get(args.tier, 2)
-        if idx < len(summary_rows):
-            exp = summary_rows[idx]
-            if len(exp) >= 6:
-                diffs = []
-                for name, col in [('环石', 1), ('限定骰子', 2), ('常驻骰子', 3), ('三重钥匙', 4), ('方斯', 5)]:
-                    ev = safe_int(exp[col])
-                    av = total.get(name, 0)
-                    if av != ev:
-                        diffs.append(f"{name} {'+' if av>ev else ''}{av-ev}")
-                if diffs:
-                    print(f"\n📋 验证差异: {'; '.join(diffs)}（多为备注资源）")
-                else:
-                    print(f"\n📋 收益汇总验证 ✅")
-
-    print(f"\n{'='*70}")
+            'limited_dice_used': tr['result']['limited_dice_used'],
+            'triple_keys_used': tr['result']['triple_keys_used'],
+            'char_draw_gap': tr['result']['char_draw_gap'],
+            'wep_draw_gap': tr['result']['wep_draw_gap'],
+            'stone_needed': tr['result']['stone_needed'],
+            'stone_remaining': tr['result']['stone_remaining'],
+        } for tr in target_results] if target_results else None,
+        'event': {
+            'participated': True,
+            'plans': event_results,
+        } if args.event else None,
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
 
 
 if __name__ == '__main__':
