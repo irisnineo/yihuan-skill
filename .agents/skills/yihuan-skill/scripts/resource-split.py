@@ -256,6 +256,8 @@ def scan_pending_items(text: str) -> list[str]:
         return []
     warnings = []
     for line in block.split('\n'):
+        if line.lstrip().startswith('#'):
+            continue
         if re.search(r'暂填|估算|待确认|待补', line):
             item = re.sub(r'^[\s\-*]+', '', line).strip()
             if item and len(item) > 3:
