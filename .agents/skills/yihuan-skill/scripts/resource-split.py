@@ -11,11 +11,12 @@
 
   # 完整规划
   python3 resource-split.py --version v1.2 --tier 大小月卡党 \\
-    --profile nineo --inventory "环石:9069,限定骰子:16,三重钥匙:10,方斯:9519534" \\
-    --target "伊洛伊:0+1" --include-affection --include-exchange
+    --draw-mode expected --profile nineo \\
+    --inventory "环石:9069,限定骰子:16,三重钥匙:10,方斯:9519534" --safe-margin 7200 \\
+    --target "伊洛伊:0+1" --event --include-exchange --include-affection
 
-  # JSON 输出
-  python3 resource-split.py --version v1.2 --tier 大小月卡党 --format json
+  # 终端表格输出（默认输出 JSON）
+  python3 resource-split.py --version v1.2 --tier 大小月卡党 --format table
 """
 
 import argparse
@@ -23,22 +24,15 @@ import json
 import re
 import sys
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 
 # ── 常量 ──
 CORE_TYPES = ['环石', '限定骰子', '三重钥匙', '常驻骰子', '方斯']
-EXPECTED_PULLS = {'限定棋盘': 45, '弧盘研摹': 60}
-SAFE_MARGIN_STONE = 7200
-
-# 联动活动方案: {方案名: (环石, 方斯)}
-EVENT_PLANS = {
-    '全方斯': (0, 11800000),
-    '性价比': (2400, 6500000),
-    '均衡': (4250, 2600000),
-    '保方斯': (5480, 500000),
-    '全环石': (5980, 0),
+DRAW_COUNTS = {
+    'expected': {'限定棋盘': 45, '弧盘研摹': 60},
+    'max': {'限定棋盘': 90, '弧盘研摹': 80},
 }
 
 
@@ -58,6 +52,14 @@ def safe_int(s: str) -> int:
         return int(s.replace(',', ''))
     except ValueError:
         return 0
+
+
+def strict_int(s: str, field_name: str) -> int:
+    """解析候选方案成本；格式错误时拒绝把数据静默当作 0。"""
+    normalized = s.replace(',', '').strip()
+    if not re.fullmatch(r'\d+', normalized):
+        raise ValueError(f'{field_name}不是有效整数: {s}')
+    return int(normalized)
 
 
 # ── Markdown 表格解析 ──
@@ -176,6 +178,21 @@ def parse_onetime_rows(rows: list[list[str]]) -> list[dict]:
             continue
         results.append({
             'source': row[0], 'type': row[1], 'qty': safe_int(row[2]), 'date': row[3],
+        })
+    return results
+
+
+def parse_event_plan_rows(rows: list[list[str]]) -> list[dict]:
+    """候选方案: 方案 | 活动环石 | 活动方斯 | 适合情况。"""
+    results = []
+    for row in rows:
+        if len(row) < 4:
+            continue
+        results.append({
+            'name': row[0],
+            'ring_cost': strict_int(row[1], f'{row[0]}的活动环石'),
+            'fs_cost': strict_int(row[2], f'{row[0]}的活动方斯'),
+            'suitable_for': row[3],
         })
     return results
 
@@ -342,11 +359,11 @@ def sorted_types(summary: dict) -> list[str]:
 
 # ── 目标匹配 ──
 
-def match_target(target_str: str, banners: list[dict]) -> dict | None:
+def match_target(target_str: str, banners: list[dict], draw_mode: str) -> dict | None:
     """
     解析目标并匹配卡池信息。
     target_str: '伊洛伊:0+1' → 角色0命+1专武
-    返回 {character, char_banner_end, weapon_banner_end, char_pulls, wep_pulls}
+    返回角色、卡池截止日期和所需抽数。
     """
     m = re.match(r'(.+?):(\d+)\+(\d+)', target_str)
     if not m:
@@ -376,27 +393,63 @@ def match_target(target_str: str, banners: list[dict]) -> dict | None:
         'char_banner_end': char_banner['end'] if char_banner else None,
         'wep_banner_name': wep_banner['name'] if wep_banner else None,
         'wep_banner_end': wep_banner['end'] if wep_banner else None,
-        'char_pulls_needed': char_count * EXPECTED_PULLS['限定棋盘'],
-        'wep_pulls_needed': wep_count * EXPECTED_PULLS['弧盘研摹'],
+        'char_draws_needed': char_count * DRAW_COUNTS[draw_mode]['限定棋盘'],
+        'wep_draws_needed': wep_count * DRAW_COUNTS[draw_mode]['弧盘研摹'],
     }
 
 
 def compute_consumption(target_info: dict, avail_ltd: int, avail_key: int,
-                        avail_stone: int) -> dict:
+                        avail_stone: int, safe_margin: int | None) -> dict:
     """计算目标消耗和结余"""
-    char_gap = max(0, target_info['char_pulls_needed'] - avail_ltd)
-    wep_gap = max(0, target_info['wep_pulls_needed'] - avail_key)
+    char_gap = max(0, target_info['char_draws_needed'] - avail_ltd)
+    wep_gap = max(0, target_info['wep_draws_needed'] - avail_key)
     stone_needed = char_gap * 160 + wep_gap * 160
     stone_left = avail_stone - stone_needed
-    safe_ok = stone_left >= SAFE_MARGIN_STONE
+    safe_ok = None if safe_margin is None else stone_left >= safe_margin
 
     return {
-        'char_pull_gap': char_gap,
-        'wep_pull_gap': wep_gap,
+        'char_draw_gap': char_gap,
+        'wep_draw_gap': wep_gap,
         'stone_needed': stone_needed,
-        'stone_remaining': max(0, stone_left),
+        'stone_remaining': stone_left,
         'safe_margin_ok': safe_ok,
     }
+
+
+def sum_resources_between(daily_items: list[dict], periodic_items: list[dict],
+                          event_items: list[dict], onetime_items: list[dict],
+                          start_exclusive: date, end_inclusive: date) -> dict[str, int]:
+    """汇总 (start_exclusive, end_inclusive] 内新开放的资源。"""
+    if end_inclusive <= start_exclusive:
+        return {}
+
+    summary = defaultdict(int)
+
+    for item in daily_items:
+        item_start = parse_date(item['start_date'])
+        item_end = parse_date(item['end_date'])
+        first_day = max(item_start, start_exclusive + timedelta(days=1))
+        last_day = min(item_end, end_inclusive)
+        if first_day <= last_day:
+            summary[item['type']] += ((last_day - first_day).days + 1) * item['daily_qty']
+
+    for item in periodic_items:
+        available_date = parse_date(item['date'])
+        if start_exclusive < available_date <= end_inclusive:
+            summary[item['type']] += item['qty']
+
+    # 活动奖励仍沿用当前规则：活动开始日视为全部可获得（分阶段开放暂不实现）。
+    for item in event_items:
+        available_date = parse_date(item['start_date'])
+        if start_exclusive < available_date <= end_inclusive:
+            summary[item['type']] += item['qty']
+
+    for item in onetime_items:
+        available_date = parse_date(item['date'])
+        if start_exclusive < available_date <= end_inclusive:
+            summary[item['type']] += item['qty']
+
+    return dict(summary)
 
 
 # ── 格式化 ──
@@ -417,20 +470,23 @@ def main():
     parser.add_argument('--version', required=True, help='版本目录名，如 v1.2')
     parser.add_argument('--date', default=datetime.now().strftime('%Y-%m-%d'), help='查询日期，默认今天')
     parser.add_argument('--tier', default='大小月卡党', choices=['零氪', '小月卡党', '大小月卡党'], help='收入档位')
-    parser.add_argument('--format', default='table', choices=['table', 'json'], help='输出格式')
-    parser.add_argument('--packs', default='', help='礼包，如 "限定骰子:10,环石:300"')
-    parser.add_argument('--costs', default='', help='方斯消耗，如 "方斯:2000000"')
-    parser.add_argument('--pool-end', default='', help='卡池截止日期')
+    parser.add_argument('--draw-mode', default='expected', choices=['expected', 'max'], help='抽数计算模式：expected=期望，max=保底；默认 expected')
+    parser.add_argument('--format', default='json', choices=['json', 'table'], help='输出格式，默认 json')
     parser.add_argument('--profile', default='', help='用户档案名')
-    parser.add_argument('--include-affection', action='store_true', help='计入好感度成本')
-    parser.add_argument('--include-exchange', action='store_true', help='计入交易所成本')
     parser.add_argument('--inventory', default='', help='当前库存，如 "环石:9069,限定骰子:16"')
+    parser.add_argument('--safe-margin', type=int, default=None, help='用户要求的环石安全垫；不传表示未设置')
+    parser.add_argument('--packs', default='', help='礼包，如 "限定骰子:10,环石:300"')
     parser.add_argument('--target', action='append', help='抽取目标，可多次使用，如 --target "真红:0+1" --target "伊洛伊:0+1"')
-    parser.add_argument('--event', default='', help='联动方案，如 "draco:保方斯"')
+    parser.add_argument('--event', action='store_true', help='参与当前版本活动并计算全部候选方案')
+    parser.add_argument('--include-exchange', action='store_true', help='计入交易所成本')
+    parser.add_argument('--include-affection', action='store_true', help='计入好感度成本')
+    parser.add_argument('--costs', default='', help='额外资源消耗，如 "方斯:2000000"')
     args = parser.parse_args()
 
+    if args.safe_margin is not None and args.safe_margin < 0:
+        parser.error('--safe-margin 不能为负数')
+
     query_date = parse_date(args.date)
-    pool_end = parse_date(args.pool_end) if args.pool_end else None
     pack_items = parse_kv_pairs(args.packs)
     cost_items = parse_kv_pairs(args.costs)
     inventory = parse_kv_pairs(args.inventory)
@@ -442,6 +498,22 @@ def main():
         print(f"❌ 未找到: {rpath}", file=sys.stderr)
         sys.exit(1)
     text = rpath.read_text(encoding='utf-8')
+
+    event_plans = []
+    if args.event:
+        event_path = script_dir / 'references' / 'versions' / args.version / 'events.md'
+        if not event_path.exists():
+            parser.error(f'当前版本缺少活动资料: {event_path}')
+        event_text = event_path.read_text(encoding='utf-8')
+        candidate_block = extract_section(event_text, '候选方案')
+        if not candidate_block:
+            parser.error(f'{event_path} 缺少“## 候选方案”')
+        try:
+            event_plans = parse_event_plan_rows(parse_table(candidate_block))
+        except ValueError as exc:
+            parser.error(f'{event_path} 的候选方案数据错误: {exc}')
+        if not event_plans:
+            parser.error(f'{event_path} 的候选方案表为空或格式不正确')
 
     version_days = safe_int(parse_kv_line(text, '版本天数') or '0')
 
@@ -467,33 +539,21 @@ def main():
     fd = [it for it in daily_items if should_include(args.tier, it['tier'])]
     fp = [it for it in periodic_items if should_include(args.tier, it['tier'])]
 
-    # ── 多目标匹配 + 联动方案 ──
+    # ── 多目标匹配 ──
     target_infos = []
     if args.target:
         for t_str in args.target:
-            ti = match_target(t_str.strip(), banners)
+            ti = match_target(t_str.strip(), banners, args.draw_mode)
             if ti:
                 target_infos.append(ti)
         # 按卡池结束时间升序排列
         target_infos.sort(key=lambda t: t.get('char_banner_end') or '9999-12-31')
 
-    # 联动方案
-    event_cost_ring = 0
-    event_cost_fs = 0
-    if args.event:
-        parts = args.event.split(':', 1)
-        if len(parts) == 2:
-            plan_name = parts[1].strip()
-            if plan_name in EVENT_PLANS:
-                event_cost_ring, event_cost_fs = EVENT_PLANS[plan_name]
-                cost_items['环石'] = cost_items.get('环石', 0) + event_cost_ring
-                cost_items['方斯'] = cost_items.get('方斯', 0) + event_cost_fs
-
     # ── 分类 ──
-    cd = [classify_daily(it, query_date, pool_end) for it in fd]
-    cp = [classify_dated(it, 'date', query_date, pool_end) for it in fp]
-    ce = [classify_dated(it, 'start_date', query_date, pool_end) for it in event_items]
-    co = [classify_dated(it, 'date', query_date, pool_end) for it in onetime_items]
+    cd = [classify_daily(it, query_date) for it in fd]
+    cp = [classify_dated(it, 'date', query_date) for it in fp]
+    ce = [classify_dated(it, 'start_date', query_date) for it in event_items]
+    co = [classify_dated(it, 'date', query_date) for it in onetime_items]
 
     # ── 分池 ──
     daily_ob = defaultdict(int)
@@ -540,6 +600,8 @@ def main():
     inventory_available = None
     if inventory:
         inventory_available = merge_summaries(inventory, remaining)
+        for rt, qty in pack_items.items():
+            inventory_available[rt] = inventory_available.get(rt, 0) + qty
 
     # ── 已过天数与好感度 ──
     obtained_days = cd[0]['obtained_days'] if cd else 0
@@ -569,34 +631,78 @@ def main():
     # ── 待确认项 ──
     pending_warnings = scan_pending_items(text)
 
-    # ── 多目标滚动消耗计算（自动加入 cost_items）──
+    # ── 多目标按各自卡池截止时间滚动计算（自动加入 cost_items）──
     target_results = []
-    if inventory_available:
-        pool_ring = inventory_available.get('环石', 0)
-        pool_ltd = inventory_available.get('限定骰子', 0)
-        pool_key = inventory_available.get('三重钥匙', 0)
+    if inventory:
+        target_pool = dict(inventory)
+        for rt, qty in pack_items.items():
+            target_pool[rt] = target_pool.get(rt, 0) + qty
     else:
-        pool_ring = obtained.get('环石', 0) + remaining.get('环石', 0)
-        pool_ltd = obtained.get('限定骰子', 0) + remaining.get('限定骰子', 0)
-        pool_key = obtained.get('三重钥匙', 0) + remaining.get('三重钥匙', 0)
+        target_pool = dict(obtained)
+
+    # 消费顺序固定为：抽卡 → 活动 → 好感度/交易所/房产等长期消费。
+    # 活动和其他成本已记录在 cost_items，留到所有抽卡目标完成后统一扣除。
+    previous_cutoff = query_date
 
     for ti in target_infos:
-        avail_ltd = pool_ltd
-        avail_key = pool_key
-        tr = compute_consumption(ti, avail_ltd, avail_key, pool_ring)
+        if not ti['char_banner_end']:
+            print(f"❌ 未找到角色 {ti['character']} 的限定棋盘，无法确定资源截止日期", file=sys.stderr)
+            sys.exit(2)
+
+        cutoff = parse_date(ti['char_banner_end'])
+        newly_available = sum_resources_between(
+            fd, fp, event_items, onetime_items, previous_cutoff, cutoff)
+        target_pool = merge_summaries(target_pool, newly_available)
+
+        avail_ltd = max(0, target_pool.get('限定骰子', 0))
+        avail_key = max(0, target_pool.get('三重钥匙', 0))
+        avail_ring = target_pool.get('环石', 0)
+        tr = compute_consumption(ti, avail_ltd, avail_key, avail_ring, args.safe_margin)
+        tr['cutoff_date'] = ti['char_banner_end']
+        tr['newly_available'] = newly_available
+
+        # 角色先使用限定骰子、武器先使用三重钥匙，仅对不足抽数使用环石补差。
+        used_ltd = min(avail_ltd, ti['char_draws_needed'])
+        used_key = min(avail_key, ti['wep_draws_needed'])
+        tr['limited_dice_used'] = used_ltd
+        tr['triple_keys_used'] = used_key
         target_results.append({'info': ti, 'result': tr})
+
+        cost_items['限定骰子'] = cost_items.get('限定骰子', 0) + used_ltd
+        cost_items['三重钥匙'] = cost_items.get('三重钥匙', 0) + used_key
         if tr['stone_needed'] > 0:
             cost_items['环石'] = cost_items.get('环石', 0) + tr['stone_needed']
-        # 从池中扣除
-        pool_ring -= tr['stone_needed']
-        pool_ltd = max(0, pool_ltd - ti['char_pulls_needed'])
-        pool_key = max(0, pool_key - ti['wep_pulls_needed'])
+        target_pool['环石'] = tr['stone_remaining']
+        target_pool['限定骰子'] = avail_ltd - used_ltd
+        target_pool['三重钥匙'] = avail_key - used_key
+        previous_cutoff = max(previous_cutoff, cutoff)
 
     # ── 最终结余（所有成本扣完后）──
     base = inventory_available if inventory_available else merge_summaries(obtained, remaining)
     balance = dict(base)
     for rt, qty in cost_items.items():
-        balance[rt] = max(0, balance.get(rt, 0) - qty)
+        balance[rt] = balance.get(rt, 0) - qty
+
+    # 每个活动候选都从同一份不含活动成本的余额独立计算，不在候选之间滚动扣除。
+    event_results = []
+    for plan in event_plans:
+        plan_balance = dict(balance)
+        plan_balance['环石'] = plan_balance.get('环石', 0) - plan['ring_cost']
+        plan_balance['方斯'] = plan_balance.get('方斯', 0) - plan['fs_cost']
+        shortages = {
+            resource_type: -qty
+            for resource_type, qty in plan_balance.items()
+            if qty < 0
+        }
+        event_results.append({
+            **plan,
+            'balance': plan_balance,
+            'shortages': shortages,
+            'safe_margin_ok': (
+                None if args.safe_margin is None
+                else plan_balance.get('环石', 0) >= args.safe_margin
+            ),
+        })
 
     # ═══════════════════════════════
     #  JSON 输出
@@ -606,7 +712,8 @@ def main():
             'version': args.version,
             'query_date': args.date,
             'tier': args.tier,
-            'pool_end': args.pool_end or None,
+            'draw_mode': args.draw_mode,
+            'safe_margin': args.safe_margin,
             'daily_remaining_days': remaining_days,
             'daily_obtained_days': obtained_days,
             'inventory': inventory if inventory else None,
@@ -625,6 +732,11 @@ def main():
                 'total': dict(total),
                 'inventory_available': dict(inventory_available) if inventory_available else None,
                 'balance': dict(balance),
+                'balance_scope': '不含活动成本' if args.event else '全部消费后',
+                'final_safe_margin_ok': (
+                    None if args.event or args.safe_margin is None
+                    else balance.get('环石', 0) >= args.safe_margin
+                ),
             },
             'profile': {
                 'name': profile_name,
@@ -644,19 +756,22 @@ def main():
                 'character': tr['info']['character'],
                 'constellation': tr['info']['constellation'],
                 'weapon': tr['info']['weapon'],
-                'char_pulls_needed': tr['info']['char_pulls_needed'],
-                'wep_pulls_needed': tr['info']['wep_pulls_needed'],
+                'char_draws_needed': tr['info']['char_draws_needed'],
+                'wep_draws_needed': tr['info']['wep_draws_needed'],
                 'char_banner_end': tr['info']['char_banner_end'],
                 'wep_banner_end': tr['info']['wep_banner_end'],
-                'char_pull_gap': tr['result']['char_pull_gap'],
-                'wep_pull_gap': tr['result']['wep_pull_gap'],
+                'cutoff_date': tr['result']['cutoff_date'],
+                'newly_available': tr['result']['newly_available'],
+                'limited_dice_used': tr['result']['limited_dice_used'],
+                'triple_keys_used': tr['result']['triple_keys_used'],
+                'char_draw_gap': tr['result']['char_draw_gap'],
+                'wep_draw_gap': tr['result']['wep_draw_gap'],
                 'stone_needed': tr['result']['stone_needed'],
                 'stone_remaining': tr['result']['stone_remaining'],
             } for tr in target_results] if target_results else None,
-            'event_plan': {
-                'name': args.event,
-                'ring_cost': event_cost_ring,
-                'fs_cost': event_cost_fs,
+            'event': {
+                'participated': True,
+                'plans': event_results,
             } if args.event else None,
         }
         print(json.dumps(output, ensure_ascii=False, indent=2))
@@ -667,9 +782,8 @@ def main():
     # ═══════════════════════════════
     print(f"{'='*70}")
     print(f"  异环 {args.version} 资源拆分")
-    parts = [f"查询日期: {args.date}", f"收入档位: {args.tier}"]
-    if pool_end:
-        parts.append(f"卡池截止: {args.pool_end}")
+    parts = [f"查询日期: {args.date}", f"收入档位: {args.tier}",
+             f"抽数模式: {args.draw_mode}"]
     if inventory:
         parts.append(f"已输库存")
     print("  |  ".join(parts))
@@ -708,16 +822,17 @@ def main():
     # 一次性
     print(f"\n📦 一次性已开放 / 未开放: {len(on_ob)} / {len(on_future)} 条")
 
-    # ── 最终汇总 ──
+    # ── 汇总 ──
     src = inventory_available if inventory_available else obtained
     label = "库存可用" if inventory_available else "已开放"
 
     all_types = sorted_types(merge_summaries(src, remaining, balance))
 
     print(f"\n{'='*70}")
-    print(f"  📊 最终汇总")
+    print(f"  📊 {'不含活动成本汇总' if args.event else '最终汇总'}")
     print(f"{'='*70}")
-    print(f"{'资源':14s} {label:>12s} {'未开放':>12s} {'可动用':>12s} {'结余':>12s}")
+    balance_label = '不含活动' if args.event else '结余'
+    print(f"{'资源':14s} {label:>12s} {'未开放':>12s} {'可动用':>12s} {balance_label:>12s}")
     print('-' * 66)
     for rt in all_types:
         src_v = src.get(rt, 0)
@@ -725,6 +840,14 @@ def main():
         avl = (inventory_available if inventory_available else merge_summaries(obtained, remaining)).get(rt, 0)
         bal = balance.get(rt, 0)
         print(f"{rt:14s} {src_v:>12,} {rem:>12,} {avl:>12,} {bal:>12,}")
+
+    final_ring = balance.get('环石', 0)
+    if args.safe_margin is not None:
+        safe_label = '不含活动安全垫' if args.event else '全部消费后安全垫'
+        print(f"\n🛡️  {safe_label}: {'✅' if final_ring >= args.safe_margin else '❌'} "
+              f"（环石 {final_ring:,} / 要求 {args.safe_margin:,}）")
+    else:
+        print("\n🛡️  安全垫：未设置")
 
     # 好感度
     if affection_items:
@@ -736,15 +859,25 @@ def main():
         ti = tr['info']
         tr_res = tr['result']
         print(f"\n🎯 目标: {ti['character']} {ti['constellation']}+{ti['weapon']}")
-        print(f"   角色: {ti['char_pulls_needed']}抽 → 缺口{tr_res['char_pull_gap']}抽 → 环石{tr_res['char_pull_gap']*160}")
-        print(f"   专武: {ti['wep_pulls_needed']}抽 → 缺口{tr_res['wep_pull_gap']}抽 → 环石{tr_res['wep_pull_gap']*160}")
+        print(f"   角色: {ti['char_draws_needed']}抽 → 缺口{tr_res['char_draw_gap']}抽 → 环石{tr_res['char_draw_gap']*160}")
+        print(f"   专武: {ti['wep_draws_needed']}抽 → 缺口{tr_res['wep_draw_gap']}抽 → 环石{tr_res['wep_draw_gap']*160}")
         print(f"   总环石消耗: {tr_res['stone_needed']:,}")
-        print(f"   结余环石: {tr_res['stone_remaining']:,} (安全垫7,200: {'✅' if tr_res['safe_margin_ok'] else '❌'})")
+        target_safe = ('未设置' if tr_res['safe_margin_ok'] is None
+                       else '✅' if tr_res['safe_margin_ok'] else '❌')
+        print(f"   结余环石: {tr_res['stone_remaining']:,}（安全垫: {target_safe}）")
 
-    # 联动方案
+    # 活动方案
     if args.event:
-        print(f"\n🎪 联动方案: {args.event}")
-        print(f"   环石{event_cost_ring:,} + 方斯{event_cost_fs:,}")
+        print("\n🎪 活动候选方案")
+        print(f"{'方案':18s} {'活动环石':>12s} {'活动方斯':>14s} {'版本末环石':>12s} {'版本末方斯':>14s} {'安全垫':>8s}")
+        print('-' * 88)
+        for plan in event_results:
+            plan_balance = plan['balance']
+            plan_safe = ('—' if plan['safe_margin_ok'] is None
+                         else '✅' if plan['safe_margin_ok'] else '❌')
+            print(f"{plan['name']:18s} {plan['ring_cost']:>12,} {plan['fs_cost']:>14,} "
+                  f"{plan_balance.get('环石', 0):>12,} {plan_balance.get('方斯', 0):>14,} "
+                  f"{plan_safe:>8s}")
 
     # 与收益汇总验证
     if summary_rows:
