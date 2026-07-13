@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>异环资源规划器</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, "Microsoft YaHei", "PingFang SC", sans-serif;
+  background: #f5f3ee; color: #1a1f1a; line-height: 1.6; padding: 16px;
+}
+.container { max-width: 720px; margin: 0 auto; }
+h1 { font-size: 22px; color: #2f6f4f; margin-bottom: 16px; text-align: center; }
+h2 { font-size: 16px; color: #2f6f4f; margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #d8e2d6; }
+.result-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.result-meta { color: #9aa89e; font-size: 12px; font-weight: 400; }
+.card { background: #fff; border-radius: 14px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.06); margin-bottom: 12px; }
+.row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.row > label:first-child { flex: 0 0 112px; font-size: 14px; color: #5d6b61; font-weight: 600; }
+.target-row { display: grid; grid-template-columns: minmax(100px,1fr) minmax(115px,1fr) minmax(135px,1fr); gap: 8px; align-items: center; margin-bottom: 10px; }
+.target-name { font-weight: 700; color: #2f6f4f; }
+select, input[type="number"] {
+  flex: 1; min-width: 70px; padding: 8px 10px; border: 1px solid #d8e2d6;
+  border-radius: 8px; font-size: 14px; background: #fafaf8; color: #1a1f1a;
+}
+select { cursor: pointer; }
+input[type="checkbox"] { width: 18px; height: 18px; margin-right: 5px; cursor: pointer; }
+.cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hint { font-size: 12px; color: #5d6b61; }
+.btn { display: block; width: 100%; padding: 12px; border: 0; border-radius: 10px; background: #2f6f4f; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
+.btn:hover { background: #3d8a63; }
+#result { display: none; }
+.res-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 8px; margin-top: 12px; }
+.res-item { background: #f7fbf5; border-radius: 10px; padding: 12px; text-align: center; }
+.res-item .label { font-size: 11px; color: #5d6b61; font-weight: 700; }
+.res-item .value { font-size: 20px; font-weight: 800; color: #2f6f4f; margin-top: 4px; }
+.res-item .value.danger { color: #a74935; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e8e8e0; }
+th { background: #e6f2e5; color: #2f6f4f; font-weight: 700; }
+td.num, th.num { text-align: right; }
+.note { margin-top: 10px; padding: 10px 12px; border-left: 3px solid #2f6f4f; background: #f2f7ef; border-radius: 6px; font-size: 13px; color: #5d6b61; }
+.alert { border-left-color: #a74935; background: #fff0eb; }
+.event-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.event-label input { margin: 0; }
+.event-row { margin-top: 12px; }
+.footer { text-align: center; font-size: 12px; color: #9aa89e; margin-top: 20px; }
+@media (max-width: 560px) {
+  .target-row { grid-template-columns: 1fr 1fr; }
+  .target-name { grid-column: 1 / -1; }
+  .cols2 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>异环资源规划器</h1>
+
+  <div class="card">
+    <h2>① 基础信息</h2>
+    <div class="row">
+      <label for="tier">充值档位</label>
+      <select id="tier">
+        <option value="零氪">零氪</option>
+        <option value="月卡" selected>月卡</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="drawMode">抽数预估</label>
+      <select id="drawMode">
+        <option value="expected" selected>期望</option>
+        <option value="max">保底</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>② 当前库存</h2>
+    <div class="cols2">
+      <div class="row"><label for="ring">环石</label><input type="number" id="ring" value="0" min="0"></div>
+      <div class="row"><label for="fs">方斯</label><input type="number" id="fs" value="0" min="0" step="0.1"><span class="hint">万方斯</span></div>
+      <div class="row"><label for="ltd">限定骰子</label><input type="number" id="ltd" value="0" min="0"></div>
+      <div class="row"><label for="key">三重钥匙</label><input type="number" id="key" value="0" min="0"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>③ 抽取目标</h2>
+    <div class="target-row">
+      <div class="target-name">真红（上半）</div>
+      <label>角色数量 <select id="charCount0"></select></label>
+      <label>对应武器数量 <select id="wepCount0"></select></label>
+    </div>
+    <div class="target-row">
+      <div class="target-name">伊洛伊（下半）</div>
+      <label>角色数量 <select id="charCount1"></select></label>
+      <label>对应武器数量 <select id="wepCount1"></select></label>
+    </div>
+    <div class="event-row">
+      <label class="target-name event-label">参与 Draco 盲盒活动 <input type="checkbox" id="participateEvent"></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>④ 额外消费</h2>
+    <div class="row">
+      <label for="affectionDaily">每日好感度礼物</label>
+      <input type="number" id="affectionDaily" value="0" min="0" step="0.01">
+      <span class="hint">万方斯</span>
+    </div>
+    <div class="row">
+      <label for="exchangeCost">猎人交易所</label>
+      <input type="number" id="exchangeCost" value="278.2" min="0" step="0.1">
+      <span class="hint">万方斯（环石+三重钥匙+永恒的螺音+初级异象材料自选箱，278.2 万方斯）</span>
+    </div>
+    <div class="row">
+      <label for="propertyVehicle">房屋载具</label>
+      <input type="number" id="propertyVehicle" value="0" min="0" step="0.1">
+      <span class="hint">万方斯</span>
+    </div>
+  </div>
+
+  <button class="btn" id="calculateButton" type="button">开始计算</button>
+
+  <div id="result" class="card">
+    <h2 class="result-heading"><span>计算结果</span><span id="resultMeta" class="result-meta"></span></h2>
+    <div id="resultContent"></div>
+  </div>
+
+  <div class="footer">数据版本 v1.2（九百九十九夜）· 按打开页面当日计算</div>
+</div>
+
+<script>
+const VERSION_DATA = {
+  version: 'v1.2',
+  start_date: '2026-07-02',
+  end_date: '2026-08-13',
+  daily_end_date: '2026-08-12',
+  days: 42,
+  banners: [
+    { character: '真红', weapon: '穿过胭红孢雾', start_date: '2026-07-02', end_date: '2026-07-23' },
+    { character: '伊洛伊', weapon: '错误的门', start_date: '2026-07-23', end_date: '2026-08-13' }
+  ],
+  daily: [
+    { source:'每日活跃', type:'环石', qty:60, start:'2026-07-02', end:'2026-08-12', tier:'全档位' },
+    { source:'日常活跃度', type:'方斯', qty:20000, start:'2026-07-02', end:'2026-08-12', tier:'全档位' },
+    { source:'一咖社经营', type:'方斯', qty:50000, start:'2026-07-02', end:'2026-08-12', tier:'全档位' },
+    { source:'月卡每日', type:'环石', qty:90, start:'2026-07-02', end:'2026-08-12', tier:'月卡' },
+    { source:'月卡每日', type:'方斯', qty:30000, start:'2026-07-02', end:'2026-08-12', tier:'月卡' }
+  ],
+  dated: [
+    { type:'环石', qty:500, date:'2026-07-02', tier:'全档位' },
+    { type:'三重钥匙', qty:40, date:'2026-07-02', tier:'全档位' },
+    { type:'永恒的螺音', qty:5, date:'2026-07-02', tier:'全档位' },
+    { type:'限定骰子', qty:5, date:'2026-08-01', tier:'全档位' },
+    { type:'常驻骰子', qty:5, date:'2026-08-01', tier:'全档位' },
+    { type:'三重钥匙', qty:20, date:'2026-08-01', tier:'全档位' },
+    { type:'方斯', qty:200000, date:'2026-08-01', tier:'全档位' },
+    { type:'方斯', qty:180000, date:'2026-08-01', tier:'全档位' },
+    ...['2026-07-02','2026-07-09','2026-07-16','2026-07-23','2026-07-30','2026-08-06'].flatMap(date => [
+      { type:'方斯', qty:700000, date, tier:'全档位' },
+      { type:'方斯', qty:18000, date, tier:'全档位' },
+      { type:'方斯', qty:75000, date, tier:'全档位' }
+    ]),
+    { type:'环石', qty:800, date:'2026-07-10', tier:'全档位' },
+    { type:'环石', qty:800, date:'2026-07-24', tier:'全档位' },
+    { type:'环石', qty:800, date:'2026-08-07', tier:'全档位' }
+  ],
+  events: [
+    { type:'限定骰子', qty:1, date:'2026-07-02' }, { type:'限定骰子', qty:1, date:'2026-07-03' },
+    { type:'限定骰子', qty:2, date:'2026-07-04' }, { type:'限定骰子', qty:1, date:'2026-07-05' },
+    { type:'限定骰子', qty:1, date:'2026-07-06' }, { type:'限定骰子', qty:1, date:'2026-07-07' },
+    { type:'限定骰子', qty:3, date:'2026-07-08' }, { type:'常驻 S 角色自选', qty:1, date:'2026-07-02' },
+    { type:'环石', qty:20, date:'2026-07-02' }, { type:'环石', qty:20, date:'2026-07-23' },
+    { type:'环石', qty:1350, date:'2026-07-02' }, { type:'常驻骰子', qty:5, date:'2026-07-02' },
+    { type:'方斯', qty:400000, date:'2026-07-02' }, { type:'环石', qty:500, date:'2026-07-02' },
+    { type:'方斯', qty:1000000, date:'2026-07-02' }, { type:'环石', qty:600, date:'2026-07-10' },
+    { type:'方斯', qty:140000, date:'2026-07-10' }, { type:'环石', qty:400, date:'2026-07-23' },
+    { type:'方斯', qty:200000, date:'2026-07-23' }, { type:'环石', qty:400, date:'2026-07-27' },
+    { type:'方斯', qty:200000, date:'2026-07-27' }, { type:'环石', qty:400, date:'2026-07-30' },
+    { type:'方斯', qty:200000, date:'2026-07-30' }, { type:'方斯', qty:700000, date:'2026-08-03' }
+  ],
+  onetime: [
+    { type:'环石', qty:300, date:'2026-07-02' }, { type:'环石', qty:1600, date:'2026-07-05' },
+    { type:'环石', qty:300, date:'2026-06-27' }, { type:'环石', qty:240, date:'2026-05-28' },
+    { type:'方斯', qty:200000, date:'2026-05-28' }
+  ],
+  event_plans: [
+    { name:'全方斯', ring_cost:0, fs_cost:11800000, suitable_for:'环石极缺、方斯极富裕' },
+    { name:'11, 14-15', ring_cost:2400, fs_cost:6500000, suitable_for:'每环石方斯大于等于 2,200 的抽数用环石' },
+    { name:'10-15', ring_cost:4250, fs_cost:2600000, suitable_for:'每环石方斯大于等于 2,000 的抽数用环石' },
+    { name:'6-15', ring_cost:5480, fs_cost:500000, suitable_for:'每环石方斯大于 1,000 的抽数用环石' },
+    { name:'全环石', ring_cost:5980, fs_cost:0, suitable_for:'强保方斯且环石充足' }
+  ]
+};
+
+const DRAW_COUNTS = {
+  expected: { character:45, weapon:60 },
+  max: { character:90, weapon:80 }
+};
+function num(id) { return Math.max(0, Number.parseInt(document.getElementById(id).value, 10) || 0); }
+function wanNum(id) {
+  const raw = document.getElementById(id).value.trim();
+  if (!/^\d+(?:\.\d{0,4})?$/.test(raw)) return 0;
+  const [whole,fraction=''] = raw.split('.');
+  return Number.parseInt(whole,10)*10000 + Number.parseInt(fraction.padEnd(4,'0') || '0',10);
+}
+function dateValue(value) { return new Date(`${value}T00:00:00`); }
+function dayDiff(start, end) { return Math.round((dateValue(end) - dateValue(start)) / 86400000); }
+function add(target, type, qty) { target[type] = (target[type] || 0) + qty; }
+function clone(value) { return JSON.parse(JSON.stringify(value)); }
+function includeTier(selected, itemTier='全档位') {
+  if (itemTier === '全档位') return true;
+  if (itemTier === '月卡') return selected === '月卡';
+  return false;
+}
+function merge(...objects) {
+  const result = {};
+  objects.forEach(object => Object.entries(object || {}).forEach(([key,value]) => add(result,key,value)));
+  return result;
+}
+function classifyResources(queryDate, tier) {
+  const remaining = {};
+  VERSION_DATA.daily.filter(item => includeTier(tier,item.tier)).forEach(item => {
+    const totalDays = dayDiff(item.start,item.end) + 1;
+    let obtainedDays = 0;
+    if (queryDate >= item.start) obtainedDays = queryDate > item.end ? totalDays : dayDiff(item.start,queryDate) + 1;
+    const remainingDays = totalDays - obtainedDays;
+    add(remaining,item.type,remainingDays * item.qty);
+  });
+  [
+    ...VERSION_DATA.dated.filter(item => includeTier(tier,item.tier)),
+    ...VERSION_DATA.events,
+    ...VERSION_DATA.onetime
+  ].filter(item => item.date > queryDate).forEach(item => add(remaining,item.type,item.qty));
+  return remaining;
+}
+
+function resourcesBetween(tier, startExclusive, endInclusive) {
+  if (endInclusive <= startExclusive) return {};
+  const result = {};
+  VERSION_DATA.daily.filter(item => includeTier(tier,item.tier)).forEach(item => {
+    const first = [item.start, nextDate(startExclusive)].sort().at(-1);
+    const last = [item.end, endInclusive].sort()[0];
+    if (first <= last) add(result,item.type,(dayDiff(first,last)+1)*item.qty);
+  });
+  [...VERSION_DATA.dated.filter(item => includeTier(tier,item.tier)), ...VERSION_DATA.events, ...VERSION_DATA.onetime]
+    .filter(item => item.date > startExclusive && item.date <= endInclusive)
+    .forEach(item => add(result,item.type,item.qty));
+  return result;
+}
+
+function nextDate(value) {
+  const date = dateValue(value); date.setDate(date.getDate()+1);
+  const year = date.getFullYear();
+  const month = String(date.getMonth()+1).padStart(2,'0');
+  const day = String(date.getDate()).padStart(2,'0');
+  return `${year}-${month}-${day}`;
+}
+
+function buildTargets() {
+  return VERSION_DATA.banners.map((banner,index) => ({
+    character:banner.character,
+    character_count:num(`charCount${index}`),
+    weapon_count:num(`wepCount${index}`),
+    banner
+  })).filter(target => target.character_count > 0 || target.weapon_count > 0)
+    .sort((a,b) => a.banner.end_date.localeCompare(b.banner.end_date));
+}
+
+function calculate() {
+  const queryDate = new Date().toLocaleDateString('sv-SE');
+  const tier = document.getElementById('tier').value;
+  const drawMode = document.getElementById('drawMode').value;
+  const inventory = {'方斯':wanNum('fs'),'环石':num('ring'),'限定骰子':num('ltd'),'三重钥匙':num('key')};
+  const remaining = classifyResources(queryDate,tier);
+  const inventoryAvailable = merge(inventory,remaining);
+  const remainingDays = Math.max(0, dayDiff(queryDate,VERSION_DATA.daily_end_date));
+  const affectionDaily = wanNum('affectionDaily');
+  const affectionRemaining = affectionDaily * remainingDays;
+  const exchangeCost = wanNum('exchangeCost');
+  const propertyVehicleCost = wanNum('propertyVehicle');
+  const costs = {};
+  if (affectionRemaining + exchangeCost + propertyVehicleCost > 0) costs['方斯'] = affectionRemaining + exchangeCost + propertyVehicleCost;
+
+  let targetPool = clone(inventory);
+  let previousCutoff = queryDate;
+  const targetResults = [];
+  buildTargets().forEach(target => {
+    const cutoff = target.banner.end_date;
+    targetPool = merge(targetPool,resourcesBetween(tier,previousCutoff,cutoff));
+    const charDraws = target.character_count * DRAW_COUNTS[drawMode].character;
+    const wepDraws = target.weapon_count * DRAW_COUNTS[drawMode].weapon;
+    const availableDice = Math.max(0,targetPool['限定骰子'] || 0);
+    const availableKeys = Math.max(0,targetPool['三重钥匙'] || 0);
+    const diceUsed = Math.min(availableDice,charDraws);
+    const keysUsed = Math.min(availableKeys,wepDraws);
+    const charGap = Math.max(0,charDraws - availableDice);
+    const wepGap = Math.max(0,wepDraws - availableKeys);
+    const stoneNeeded = (charGap + wepGap) * 160;
+    const stoneRemaining = (targetPool['环石'] || 0) - stoneNeeded;
+    add(costs,'限定骰子',diceUsed); add(costs,'三重钥匙',keysUsed); add(costs,'环石',stoneNeeded);
+    targetPool['限定骰子'] = availableDice - diceUsed;
+    targetPool['三重钥匙'] = availableKeys - keysUsed;
+    targetPool['环石'] = stoneRemaining;
+    targetResults.push({
+      character:target.character, character_count:target.character_count, weapon_count:target.weapon_count,
+      char_draws_needed:charDraws, wep_draws_needed:wepDraws,
+      banner:{start_date:target.banner.start_date,end_date:target.banner.end_date},
+      limited_dice_used:diceUsed, triple_keys_used:keysUsed,
+      char_draw_gap:charGap, wep_draw_gap:wepGap,
+      stone_needed:stoneNeeded, stone_remaining:stoneRemaining
+    });
+    if (cutoff > previousCutoff) previousCutoff = cutoff;
+  });
+
+  const balance = clone(inventoryAvailable);
+  Object.entries(costs).forEach(([type,qty]) => { balance[type] = (balance[type] || 0) - qty; });
+  const participates = document.getElementById('participateEvent').checked;
+  const eventPlans = participates ? VERSION_DATA.event_plans.map(plan => {
+    const planBalance = clone(balance);
+    planBalance['环石'] = (planBalance['环石'] || 0) - plan.ring_cost;
+    planBalance['方斯'] = (planBalance['方斯'] || 0) - plan.fs_cost;
+    return {...plan,balance:planBalance};
+  }) : null;
+
+  const output = {
+    queryDate, remainingDays, inventory, remaining, inventoryAvailable, balance,
+    balanceScope:participates?'不含活动成本':'全部消费后',
+    expenses:{affectionDaily,affectionRemaining,exchangeCost,propertyVehicleCost},
+    targets:targetResults,
+    eventPlans
+  };
+  render(output);
+  return output;
+}
+
+function fmt(number) {
+  return number.toLocaleString('zh-CN');
+}
+function fmtInt(number) { return number.toLocaleString('zh-CN'); }
+function fmtFs(number) {
+  const sign = number < 0 ? '-' : '';
+  const value = Math.abs(Math.trunc(number));
+  const whole = Math.floor(value/10000).toLocaleString('zh-CN');
+  const fraction = String(value%10000).padStart(4,'0').replace(/0+$/,'');
+  return `${sign}${whole}${fraction ? `.${fraction}` : ''} 万方斯`;
+}
+function drawCost(toolCount, toolName, ringCost) {
+  return `${fmtInt(toolCount)} ${toolName}${ringCost ? ` + ${fmtInt(ringCost)} 环石` : ''}`;
+}
+function esc(value) { return String(value).replace(/[&<>"']/g,char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char])); }
+function resourceRows(output) {
+  return ['环石','限定骰子','三重钥匙','常驻骰子','方斯'].map(type => {
+    const format = type === '方斯' ? value => fmtFs(value) : fmt;
+    return `<tr><td>${type}</td><td class="num">${format(output.inventory[type]||0)}</td><td class="num">${format(output.remaining[type]||0)}</td><td class="num"><b>${format(output.inventoryAvailable[type]||0)}</b></td></tr>`;
+  }).join('');
+}
+
+function render(output) {
+  const balance = output.balance;
+  let html = `<div class="res-grid">
+    <div class="res-item"><div class="label">版本末环石（${esc(output.balanceScope)}）</div><div class="value ${(balance['环石']||0)<0?'danger':''}">${fmt(balance['环石']||0)}</div></div>
+    <div class="res-item"><div class="label">版本末方斯（${esc(output.balanceScope)}）</div><div class="value ${(balance['方斯']||0)<0?'danger':''}">${fmtFs(balance['方斯']||0)}</div></div>
+    <div class="res-item"><div class="label">限定骰子余量</div><div class="value ${(balance['限定骰子']||0)<0?'danger':''}">${fmt(balance['限定骰子']||0)}</div></div>
+    <div class="res-item"><div class="label">三重钥匙余量</div><div class="value ${(balance['三重钥匙']||0)<0?'danger':''}">${fmt(balance['三重钥匙']||0)}</div></div>
+  </div>`;
+  html += `<h2>资源统计</h2><table><thead><tr><th>资源</th><th class="num">当前</th><th class="num">未开放</th><th class="num">可动用</th></tr></thead><tbody>${resourceRows(output)}</tbody></table>`;
+  html += '<h2>目标消耗</h2><table><thead><tr><th>项目</th><th>消耗</th><th>备注</th></tr></thead><tbody>';
+  if (output.targets.length) {
+    output.targets.forEach(target => {
+      const bannerNote = `卡池 ${target.banner.start_date} - ${target.banner.end_date}。`;
+      if (target.character_count) {
+        html += `<tr><td>角色 ${esc(target.character)}</td><td>${drawCost(target.limited_dice_used,'限定骰子',target.char_draw_gap*160)}</td><td>${bannerNote}</td></tr>`;
+      }
+      if (target.weapon_count) {
+        html += `<tr><td>武器 ${esc(target.character)}专武</td><td>${drawCost(target.triple_keys_used,'三重钥匙',target.wep_draw_gap*160)}</td><td>${bannerNote}</td></tr>`;
+      }
+    });
+  }
+  if (output.expenses.affectionRemaining) {
+    html += `<tr><td>好感度</td><td>${fmtFs(output.expenses.affectionRemaining)}</td><td>${fmtFs(output.expenses.affectionDaily)}/天 x ${output.remainingDays} 天</td></tr>`;
+  }
+  if (output.expenses.exchangeCost) {
+    const exchangeNote = output.expenses.exchangeCost === 2782000
+      ? '购买环石、三重钥匙、永恒的螺音和初级异象材料自选箱。'
+      : '自定义';
+    html += `<tr><td>猎人交易所</td><td>${fmtFs(output.expenses.exchangeCost)}</td><td>${exchangeNote}</td></tr>`;
+  }
+  if (output.expenses.propertyVehicleCost) {
+    html += `<tr><td>房屋载具</td><td>${fmtFs(output.expenses.propertyVehicleCost)}</td><td>预留房屋载具消费。</td></tr>`;
+  }
+  html += '</tbody></table>';
+  if (output.eventPlans) {
+    html += '<h2>Draco 盲盒候选方案</h2><table><thead><tr><th>方案</th><th class="num">活动环石</th><th class="num">活动方斯</th><th class="num">末环石</th><th class="num">末方斯</th></tr></thead><tbody>';
+    output.eventPlans.forEach(plan => {
+      html += `<tr><td>${esc(plan.name)}</td><td class="num">${fmtInt(plan.ring_cost)}</td><td class="num">${fmtFs(plan.fs_cost)}</td><td class="num">${fmtInt(plan.balance['环石']||0)}</td><td class="num">${fmtFs(plan.balance['方斯']||0)}</td></tr>`;
+    });
+    html += '</tbody></table>';
+  }
+  if ((balance['环石']||0)<0 || (balance['方斯']||0)<0) html += '<div class="note alert">存在负数结余，结果保留真实资源缺口。</div>';
+  document.getElementById('resultMeta').textContent = `查询日期 ${output.queryDate} · 剩余 ${output.remainingDays} 天`;
+  document.getElementById('resultContent').innerHTML = html;
+  document.getElementById('result').style.display = 'block';
+  document.getElementById('result').scrollIntoView({behavior:'smooth'});
+}
+
+function fillCountSelect(id,max) {
+  const select = document.getElementById(id);
+  for (let value=0; value<=max; value++) select.add(new Option(String(value),String(value)));
+}
+['charCount0','charCount1'].forEach(id => fillCountSelect(id,7));
+['wepCount0','wepCount1'].forEach(id => fillCountSelect(id,5));
+document.getElementById('calculateButton').addEventListener('click',calculate);
+</script>
+</body>
+</html>
