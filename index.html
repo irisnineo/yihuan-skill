@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>异环资源规划器</title>
+<title>异环资源在线计算器</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -24,12 +24,15 @@ select, input[type="number"] {
   flex: 1; min-width: 70px; padding: 8px 10px; border: 1px solid #d8e2d6;
   border-radius: 8px; font-size: 14px; background: #fafaf8; color: #1a1f1a;
 }
+input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { margin: 0; -webkit-appearance: none; }
 select { cursor: pointer; }
 input[type="checkbox"] { width: 18px; height: 18px; margin-right: 5px; cursor: pointer; }
 .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .hint { font-size: 12px; color: #5d6b61; }
 .row-note { flex: 0 0 100%; margin-left: 120px; }
-.btn { display: block; width: 100%; padding: 12px; border: 0; border-radius: 10px; background: #2f6f4f; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
+.btn { display: block; width: 100%; margin-bottom: 12px; padding: 12px; border: 0; border-radius: 10px; background: #2f6f4f; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
 .btn:hover { background: #3d8a63; }
 #result { display: none; }
 .res-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 8px; margin-top: 12px; }
@@ -62,7 +65,7 @@ td.num, th.num { text-align: right; }
 </head>
 <body>
 <div class="container">
-  <h1>异环资源规划器</h1>
+  <h1>异环资源在线计算器</h1>
 
   <div class="card">
     <h2>① 基础信息</h2>
@@ -136,7 +139,7 @@ td.num, th.num { text-align: right; }
     <div id="resultContent"></div>
   </div>
 
-  <div class="footer">数据版本 v1.2（九百九十九夜）· 按打开页面当日计算</div>
+  <div class="footer">数据版本 v1.2（九百九十九夜）· 按查询当日计算</div>
 </div>
 
 <script>
@@ -408,7 +411,7 @@ function render(output) {
     html += '</tbody></table>';
   }
   if ((balance['环石']||0)<0 || (balance['方斯']||0)<0) html += '<div class="note alert">存在负数结余，结果保留真实资源缺口。</div>';
-  document.getElementById('resultMeta').textContent = `查询日期 ${output.queryDate} · 剩余 ${output.remainingDays} 天`;
+  document.getElementById('resultMeta').textContent = `查询日期 ${output.queryDate} · 版本剩余 ${output.remainingDays} 天`;
   document.getElementById('resultContent').innerHTML = html;
   document.getElementById('result').style.display = 'block';
   document.getElementById('result').scrollIntoView({behavior:'smooth'});

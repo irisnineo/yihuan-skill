@@ -6,9 +6,9 @@
 
 ## 在线计算
 
-[访问当前版本精简版](https://irisnineo.github.io/yihuan-skill/)
+[访问异环资源在线计算器](https://irisnineo.github.io/yihuan-skill/)
 
-精简版用于按查询当日库存，快速计算当前版本的抽卡目标、活动和额外方斯消费。
+在线计算器为精简版，仅用于根据查询当日库存，快速计算当前版本抽卡目标、活动及额外方斯消费后的资源结余。
 
 如需跨版本规划、活动方案推荐、用户个性化建议或完整 HTML 报告，请使用 [yihuan-skill](.agents/skills/yihuan-skill/SKILL.md)。
 
