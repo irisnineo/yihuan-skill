@@ -28,6 +28,7 @@ select { cursor: pointer; }
 input[type="checkbox"] { width: 18px; height: 18px; margin-right: 5px; cursor: pointer; }
 .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .hint { font-size: 12px; color: #5d6b61; }
+.row-note { flex: 0 0 100%; margin-left: 120px; }
 .btn { display: block; width: 100%; padding: 12px; border: 0; border-radius: 10px; background: #2f6f4f; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
 .btn:hover { background: #3d8a63; }
 #result { display: none; }
@@ -47,9 +48,15 @@ td.num, th.num { text-align: right; }
 .event-row { margin-top: 12px; }
 .footer { text-align: center; font-size: 12px; color: #9aa89e; margin-top: 20px; }
 @media (max-width: 560px) {
-  .target-row { grid-template-columns: 1fr 1fr; }
+  .target-row { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .target-name { grid-column: 1 / -1; }
+  .target-row > label {
+    display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center;
+    gap: 4px; min-width: 0; white-space: nowrap; font-size: 13px;
+  }
+  .target-row > label select { width: 100%; min-width: 0; padding-inline: 6px; }
   .cols2 { grid-template-columns: 1fr; }
+  .row-note { margin-left: 0; }
 }
 </style>
 </head>
@@ -90,12 +97,12 @@ td.num, th.num { text-align: right; }
     <div class="target-row">
       <div class="target-name">真红（上半）</div>
       <label>角色数量 <select id="charCount0"></select></label>
-      <label>对应武器数量 <select id="wepCount0"></select></label>
+      <label>武器数量 <select id="wepCount0"></select></label>
     </div>
     <div class="target-row">
       <div class="target-name">伊洛伊（下半）</div>
       <label>角色数量 <select id="charCount1"></select></label>
-      <label>对应武器数量 <select id="wepCount1"></select></label>
+      <label>武器数量 <select id="wepCount1"></select></label>
     </div>
     <div class="event-row">
       <label class="target-name event-label">参与 Draco 盲盒活动 <input type="checkbox" id="participateEvent"></label>
@@ -112,7 +119,8 @@ td.num, th.num { text-align: right; }
     <div class="row">
       <label for="exchangeCost">猎人交易所</label>
       <input type="number" id="exchangeCost" value="278.2" min="0" step="0.1">
-      <span class="hint">万方斯（环石+三重钥匙+永恒的螺音+初级异象材料自选箱，278.2 万方斯）</span>
+      <span class="hint">万方斯</span>
+      <span class="hint row-note">（环石+三重钥匙+永恒的螺音+初级异象材料自选箱，278.2 万方斯）</span>
     </div>
     <div class="row">
       <label for="propertyVehicle">房屋载具</label>
